@@ -3,12 +3,14 @@ import React, { useState, useEffect, useRef } from "react";
 const VideoStream = () => {
   const [imageSrc, setImageSrc] = useState(null);
   const [status, setStatus] = useState("Disconnected");
+  const [logs, setLogs] = useState([]); // State for storing logs
   const ws = useRef(null);
+  const logsEndRef = useRef(null); // To auto-scroll logs
 
   useEffect(() => {
     const connect = () => {
       // Your Ngrok URL
-      const socketUrl = "https://solenoidally-nonbearded-rocco.ngrok-free.dev";
+      const socketUrl = "wss://solenoidally-nonbearded-rocco.ngrok-free.dev";
 
       setStatus("Connecting...");
       ws.current = new WebSocket(socketUrl);
@@ -16,10 +18,20 @@ const VideoStream = () => {
       ws.current.onopen = () => {
         console.log("Connected");
         setStatus("Connected");
+        addLog("System Connected to Interface");
       };
 
       ws.current.onmessage = (event) => {
-        setImageSrc(`data:image/jpeg;base64,${event.data}`);
+        const data = event.data;
+        
+        // Check if it's a log message
+        if (typeof data === 'string' && data.startsWith("LOG:")) {
+          const logMessage = data.substring(4); // Remove "LOG:" prefix
+          addLog(logMessage);
+        } else {
+          // It's an image
+          setImageSrc(`data:image/jpeg;base64,${data}`);
+        }
       };
 
       ws.current.onclose = () => {
@@ -36,6 +48,12 @@ const VideoStream = () => {
     connect();
     return () => ws.current?.close();
   }, []);
+
+  // Helper to add logs and keep only last 50
+  const addLog = (message) => {
+    const timestamp = new Date().toLocaleTimeString();
+    setLogs(prevLogs => [`[${timestamp}] ${message}`, ...prevLogs].slice(0, 50));
+  };
 
   return (
     <div className="page-container">
@@ -74,6 +92,23 @@ const VideoStream = () => {
           )}
         </div>
 
+        {/* --- NEW: Logs Terminal --- */}
+        <div className="logs-container">
+          <div className="logs-header">SYSTEM LOGS</div>
+          <div className="logs-content">
+            {logs.length === 0 ? (
+              <div className="log-item waiting">Waiting for logs...</div>
+            ) : (
+              logs.map((log, index) => (
+                <div key={index} className="log-item">
+                  <span className="log-arrow">{">"}</span> {log}
+                </div>
+              ))
+            )}
+            <div ref={logsEndRef} />
+          </div>
+        </div>
+
         {/* Footer */}
         <div className="card-footer">
           <span>System: <strong>Active</strong></span>
@@ -83,9 +118,10 @@ const VideoStream = () => {
       </div>
 
       <style jsx>{`
-        /* 1. Full Screen Fix */
+        /* ... (כל הסטיילים הקודמים נשארים אותו דבר, הוספתי רק את הלוגים למטה) ... */
+        
         .page-container {
-          position: fixed; /* Forces full screen */
+          position: fixed;
           top: 0;
           left: 0;
           width: 100vw;
@@ -100,34 +136,34 @@ const VideoStream = () => {
           z-index: 9999;
         }
 
-        /* 2. Glass Card */
         .glass-card {
           background: rgba(255, 255, 255, 0.03);
           backdrop-filter: blur(20px);
           -webkit-backdrop-filter: blur(20px);
           border: 1px solid rgba(255, 255, 255, 0.08);
           border-radius: 24px;
-          padding: 30px;
+          padding: 24px;
           width: 90%;
           max-width: 800px;
+          height: 90vh; /* קצת יותר גבוה בשביל הלוגים */
           box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
           display: flex;
           flex-direction: column;
-          gap: 20px;
+          gap: 16px;
         }
 
-        /* 3. Header */
+        /* Header */
         .card-header {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          padding-bottom: 15px;
+          padding-bottom: 10px;
           border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         }
 
         .app-title {
           margin: 0;
-          font-size: 1.8rem;
+          font-size: 1.5rem;
           font-weight: 800;
           letter-spacing: -1px;
           background: linear-gradient(to right, #ffffff, #a5a5a5);
@@ -137,20 +173,20 @@ const VideoStream = () => {
 
         .subtitle {
           margin: 2px 0 0 0;
-          font-size: 0.8rem;
+          font-size: 0.7rem;
           color: rgba(255, 255, 255, 0.4);
           text-transform: uppercase;
           letter-spacing: 2px;
         }
 
-        /* 4. Status */
+        /* Status */
         .status-pill {
           display: flex;
           align-items: center;
           gap: 8px;
           padding: 6px 14px;
           border-radius: 99px;
-          font-size: 0.8rem;
+          font-size: 0.7rem;
           font-weight: 600;
           background: rgba(0, 0, 0, 0.4);
           border: 1px solid rgba(255, 255, 255, 0.1);
@@ -164,16 +200,17 @@ const VideoStream = () => {
         .disconnected { color: #f87171; }
         .disconnected .status-dot { background: #f87171; }
 
-        /* 5. Video Area */
+        /* Video Area */
         .video-frame {
           position: relative;
           width: 100%;
           aspect-ratio: 16/9;
           background: #000;
-          border-radius: 16px;
+          border-radius: 12px;
           overflow: hidden;
           border: 1px solid rgba(255, 255, 255, 0.1);
           box-shadow: 0 0 40px rgba(0,0,0,0.5);
+          flex-shrink: 0; 
         }
 
         .stream-image {
@@ -184,9 +221,9 @@ const VideoStream = () => {
 
         .camera-overlay {
           position: absolute;
-          top: 20px;
-          left: 20px;
-          right: 20px;
+          top: 16px;
+          left: 16px;
+          right: 16px;
           display: flex;
           justify-content: space-between;
           z-index: 10;
@@ -195,9 +232,9 @@ const VideoStream = () => {
         .rec-badge {
           background: rgba(220, 38, 38, 0.2);
           color: #ef4444;
-          padding: 5px 12px;
+          padding: 4px 10px;
           border-radius: 6px;
-          font-size: 0.7rem;
+          font-size: 0.65rem;
           font-weight: 800;
           display: flex;
           align-items: center;
@@ -210,15 +247,65 @@ const VideoStream = () => {
         .live-badge {
           background: rgba(0, 0, 0, 0.5);
           color: #fff;
-          padding: 5px 10px;
+          padding: 4px 8px;
           border-radius: 6px;
-          font-size: 0.7rem;
+          font-size: 0.65rem;
           font-weight: 700;
           border: 1px solid rgba(255, 255, 255, 0.1);
           backdrop-filter: blur(4px);
         }
 
-        /* 6. Placeholder */
+        /* Logs Section (New Style) */
+        .logs-container {
+          flex-grow: 1;
+          background: rgba(0, 0, 0, 0.6);
+          border-radius: 12px;
+          border: 1px solid rgba(255, 255, 255, 0.05);
+          padding: 12px;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          font-family: 'Courier New', monospace;
+        }
+
+        .logs-header {
+          font-size: 0.7rem;
+          color: rgba(255, 255, 255, 0.3);
+          margin-bottom: 8px;
+          letter-spacing: 1px;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+          padding-bottom: 4px;
+        }
+
+        .logs-content {
+          flex-grow: 1;
+          overflow-y: auto;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        
+        /* סגנון פס גלילה ללוגים */
+        .logs-content::-webkit-scrollbar { width: 6px; }
+        .logs-content::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 3px; }
+
+        .log-item {
+          font-size: 0.8rem;
+          color: #10b981; /* ירוק מטריקס */
+          line-height: 1.4;
+        }
+        
+        .log-arrow {
+          color: #059669;
+          margin-right: 4px;
+        }
+
+        .log-item.waiting {
+          color: rgba(255, 255, 255, 0.2);
+          font-style: italic;
+        }
+
+        /* Placeholder */
         .placeholder {
           width: 100%;
           height: 100%;
@@ -239,12 +326,12 @@ const VideoStream = () => {
           opacity: 0.5;
         }
 
-        /* 7. Footer */
+        /* Footer */
         .card-footer {
           display: flex;
           justify-content: space-between;
-          padding: 0 10px;
-          font-size: 0.75rem;
+          padding: 0 5px;
+          font-size: 0.7rem;
           color: rgba(255, 255, 255, 0.3);
         }
 

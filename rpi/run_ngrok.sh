@@ -11,4 +11,4 @@ sleep 5
 # 3. הפעלת המערכת הראשית (פייתון)
 echo "Starting Main System..."
 # שימוש בנתיב המלא לפייתון ולסקריפט כדי למנוע טעויות
-/home/afik191/EyesOn/venv/bin/python /home/afik191/EyesOn/main_system.py
+/home/afik191/EyesOn/venv/bin/python /home/afik191/EyesOn/rpi/main_system.py

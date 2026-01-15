@@ -2,3 +2,6 @@ venv/
 __pycache__/
 *.DS_Store
 rpi/yolov8n.pt
+rpi/backup.py
+rpi/server.py
+rpi/voice_test.py

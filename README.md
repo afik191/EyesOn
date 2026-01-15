@@ -1,4 +1,4 @@
-# EyesOn 
+
 ### AI-Powered Assistive Wearable for the Visually Impaired
 
 **EyesOn** is a smart wearable system designed to assist visually impaired individuals navigate their surroundings safely. Powered by a **Raspberry Pi 5** and **YOLOv11**, the system detects obstacles in real-time, provides directional audio feedback, and allows a remote caregiver to view a live feed and communicate via a **Walkie-Talkie** feature.
@@ -52,6 +52,90 @@ EyesOn/
 │   │   └── ...
 │   └── package.json
 └── README.md
+```
+## Installation & Setup
+1. Raspberry Pi (Backend)
+Prerequisites:
+
+* Raspberry Pi 5 with Raspberry Pi OS (Bookworm).
+
+* Python 3.11+
+
+* ```ffmpeg``` and ```espeak``` installed.
+
+setup:
+```bash
+# Clone the repository
+git clone [https://github.com/afik191/EyesOn.git](https://github.com/afik191/EyesOn.git)
+cd EyesOn/rpi
+
+# Install dependencies
+pip install ultralytics opencv-python websockets picamera2
+
+# Install system audio tools
+sudo apt update && sudo apt install ffmpeg espeak pulseaudio-utils -y
+```
+Auto-Start Service: The system runs automatically on boot using a Systemd service.
+```bash
+sudo cp smart-hat.service /etc/systemd/system/
+sudo systemctl enable smart-hat.service
+sudo systemctl start smart-hat.service
+```
+
+2. Web Client (Frontend)
+Setup:
+```bash
+cd camera-client
+npm install
+```
+Run Locally:
+```bash
+npm run dev
+```
+Note: The frontend is deployed on Vercel for production.
+
+
+## Usage
+1. Power On: Connect the power bank to the Raspberry Pi.
+
+2. Auto-Connect: The system automatically connects to the configured WiFi and Bluetooth headset.
+
+3. Monitoring: The caregiver accesses the Vercel link.
+
+4. Interaction:
+
+    * View: Live video stream and detection logs appear on screen.
+
+    * Talk: Hold the "HOLD TO TALK" button to speak to the user.
+
+
+## Screenshots
+<img width="846" height="1195" alt="{D5EC4E3C-26DA-4E13-8460-EFE84305BC9B}" src="https://github.com/user-attachments/assets/84c59f57-e23d-48d7-b3db-1f6aad877250" />
+
+---
+
+##  Field Testing & Observations
+
+During the testing phase, we identified a slight latency between real-world events and the audio alerts. Additionally, a **"Low Voltage"** warning appeared on the Raspberry Pi when powered by a portable battery.
+
+We conducted a deep investigation with faculty assistance, including physical voltage measurements:
+* **Wall Charger:** Measured **5.01V**.
+* **Power Bank:** Measured **4.97V**.
+
+**Conclusion:**
+Despite the negligible voltage difference, the system still triggered low-voltage warnings. Our hypothesis is that the portable battery struggles to supply stable **current** (Amps) during peak processing moments (throttling), causing performance dips that couldn't be isolated by voltage measurements alone.
+
+###  Limitations
+* **Lighting Conditions:** The current camera module performs poorly in low-light environments, limiting the system's effectiveness primarily to daytime use.
+
+---
+
+##  Future Work & Recommendations
+
+Based on our findings, we recommend the following upgrades for the next version:
+
+1.  **Hardware Upgrade:** Switch to a camera with a **Low Light / Night Vision** sensor or a **Global Shutter** camera to improve detection reliability in motion and darkness.
+2.  **Power Supply:** Upgrade to a battery bank that supports **PD (Power Delivery)** protocol with 5A output. This should resolve the "Low Voltage" throttling and improve system response time.
 
 
 

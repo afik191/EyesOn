@@ -7,9 +7,10 @@ import base64
 import time
 import threading
 import queue
+import subprocess # <--- הוספנו את זה לטיפול בנגן
 from ultralytics import YOLO
 
-# --- RPi 5 Fix: טעינת דרייבר המצלמה ---
+# --- RPi 5 Fix ---
 sys.path.append('/usr/lib/python3/dist-packages')
 
 try:
@@ -25,7 +26,7 @@ HEADLESS_MODE = True
 
 # הגדרות רמקולים
 JBL_SINK = "bluez_output.7C_9A_1D_AB_46_50.1"
-AIRPODS_SINK = "bluez_output.AC_C9_06_32_31_DE.1" # הכתובת שמצאת קודם
+AIRPODS_SINK = "bluez_output.AC_C9_06_32_31_DE.1" 
 
 KNOWN_OBJECTS = [
     'car', 'bus', 'truck', 'bicycle', 'motorcycle', 'person',
@@ -48,41 +49,28 @@ PRIORITY = {
 }
 
 # ---------------- LOGGING SYSTEM ----------------
-# תור לשמירת הודעות לוג שצריכות להישלח לאתר
 log_queue = queue.Queue()
 
 def broadcast_log(message):
-    """מדפיס לטרמינל וגם שומר בתור שליחה לאתר"""
     print(f"ℹ️ {message}")
     log_queue.put(f"LOG:{message}")
 
-# ---------------- AUDIO SYSTEM ----------------
+# ---------------- AUDIO SYSTEM (TTS) ----------------
 speech_queue = queue.Queue()
 
 def speaker_worker():
     broadcast_log("🔊 Speaker thread active")
-    
     while True:
         try:
             text_to_speak = speech_queue.get(timeout=1)
-            if text_to_speak is None:
-                break
+            if text_to_speak is None: break
             
             broadcast_log(f"🗣️ Speaking: {text_to_speak}")
             
-            # JBL Attempt
-            cmd_jbl = f'espeak -a 200 -s 150 "{text_to_speak}" --stdout | pw-play --target {JBL_SINK} - 2>/dev/null'
-            ret = os.system(cmd_jbl)
-            
-            if ret != 0:
-                # AirPods Attempt
-                broadcast_log("⚠️ JBL unreachable. Trying AirPods...")
-                cmd_air = f'espeak -a 200 -s 150 "{text_to_speak}" --stdout | pw-play --target {AIRPODS_SINK} - 2>/dev/null'
-                ret_air = os.system(cmd_air)
-                
-                if ret_air != 0:
-                        broadcast_log("⚠️ AirPods unreachable. Using Default.")
-                        os.system(f'espeak -a 200 -s 150 "{text_to_speak}" --stdout | pw-play -')
+            # מנסה לדבר ל-Default (שהוגדר כאיירפודס בסקריפט ההפעלה)
+            # משתמש ב-pw-play שמחובר ל-PipeWire
+            cmd = f'espeak -a 200 -s 150 "{text_to_speak}" --stdout | pw-play - 2>/dev/null'
+            os.system(cmd)
 
             speech_queue.task_done()
         except queue.Empty:
@@ -97,11 +85,9 @@ connected_clients = set()
 
 def can_speak(track_id: int) -> bool:
     t = time.time()
-    if t - last_global_spoken < GLOBAL_COOLDOWN_SEC:
-        return False
+    if t - last_global_spoken < GLOBAL_COOLDOWN_SEC: return False
     last_t = last_spoken_by_id.get(track_id, 0.0)
-    if t - last_t < PER_ID_COOLDOWN_SEC:
-        return False
+    if t - last_t < PER_ID_COOLDOWN_SEC: return False
     return True
 
 def mark_spoken(track_id: int):
@@ -110,19 +96,47 @@ def mark_spoken(track_id: int):
     last_spoken_by_id[track_id] = t
     last_global_spoken = t
 
-# ---------------- WEBSOCKET ----------------
+# ---------------- WEBSOCKET HANDLER (AUDIO IN) ----------------
 async def handler(websocket):
     broadcast_log(f"Client connected: {websocket.remote_address}")
     connected_clients.add(websocket)
+    
+    # תהליך לנגינת אודיו נכנס (Walkie Talkie)
+    # אנו פותחים את ffplay במצב שמקבל מידע דרך ה-Pipe
+    audio_process = None
+    
     try:
-        await websocket.wait_closed()
-    except:
+        async for message in websocket:
+            # אם ההודעה היא בייטים (Binary) - זה אודיו מהמשתמש
+            if isinstance(message, bytes):
+                if audio_process is None or audio_process.poll() is not None:
+                    # פתיחת נגן חדש אם לא קיים
+                    # -nodisp: בלי חלון, -probesize 32: טעינה מהירה, -sync audio: סנכרון
+                    audio_process = subprocess.Popen(
+                        ['ffplay', '-nodisp', '-autoexit', '-probesize', '32', '-sync', 'audio', '-i', 'pipe:0'],
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL
+                    )
+                
+                # כתיבת המידע לתוך הנגן
+                try:
+                    audio_process.stdin.write(message)
+                    audio_process.stdin.flush()
+                except Exception as e:
+                    print(f"Audio write error: {e}")
+
+    except websockets.exceptions.ConnectionClosed:
         pass
+    except Exception as e:
+        print(f"Connection error: {e}")
     finally:
         connected_clients.remove(websocket)
+        if audio_process:
+            audio_process.kill() # סגירת הנגן כשהלקוח מתנתק
         broadcast_log("Client disconnected")
 
-# ---------------- MAIN LOOP ----------------
+# ---------------- MAIN LOOP (VIDEO OUT) ----------------
 async def run_system():
     broadcast_log("⏳ Loading YOLOv11 model...")
     model = YOLO("yolo11n.pt")
@@ -139,10 +153,8 @@ async def run_system():
     SCREEN_W, SCREEN_H = 640, 480
     FRAME_AREA = SCREEN_W * SCREEN_H
     CENTER_X = SCREEN_W / 2
-    
     corridor_half = (SCREEN_W * CENTER_CORRIDOR_WIDTH_RATIO) / 2
-    corridor_left = CENTER_X - corridor_half
-    corridor_right = CENTER_X + corridor_half
+    corridor_left, corridor_right = CENTER_X - corridor_half, CENTER_X + corridor_half
 
     try:
         while True:
@@ -162,47 +174,36 @@ async def run_system():
 
                     track_id = int(box.id[0])
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
-                    w = max(0, x2 - x1)
-                    h = max(0, y2 - y1)
+                    w, h = max(0, x2 - x1), max(0, y2 - y1)
                     class_id = int(box.cls[0])
                     name = model.names[class_id]
                     conf = float(box.conf[0])
 
-                    if name not in KNOWN_OBJECTS: continue
-                    if conf < CONF_THRESHOLD: continue
-
+                    if name not in KNOWN_OBJECTS or conf < CONF_THRESHOLD: continue
                     area_ratio = (w * h) / FRAME_AREA
                     if area_ratio < AREA_THRESHOLD: continue
 
                     obj_center_x = x1 + w / 2
-                    if USE_CENTER_CORRIDOR:
-                        if obj_center_x < corridor_left or obj_center_x > corridor_right:
-                            continue
+                    if USE_CENTER_CORRIDOR and (obj_center_x < corridor_left or obj_center_x > corridor_right):
+                        continue
 
                     direction = "Move Right" if obj_center_x < CENTER_X else "Move Left"
                     msg = f"{direction}, {name} ahead"
-                    
                     pr = PRIORITY.get(name, 1)
                     score = (area_ratio * 100.0) + (pr * 10.0) + conf
 
                     if best is None or score > best["score"]:
-                        best = {
-                            "score": score, "track_id": track_id, "name": name,
-                            "msg": msg, "coords": (x1, y1, x2, y2),
-                            "area_ratio": area_ratio, "conf": conf
-                        }
+                        best = {"score": score, "track_id": track_id, "name": name, "msg": msg, "coords": (x1, y1, x2, y2)}
 
-            if best is not None:
-                tid = best["track_id"]
-                if can_speak(tid):
+            if best:
+                if can_speak(best["track_id"]):
                     broadcast_log(f"🚨 ALERT: {best['msg']}")
                     speech_queue.put(best["msg"])
-                    mark_spoken(tid)
-
+                    mark_spoken(best["track_id"])
+                
                 x1, y1, x2, y2 = best["coords"]
                 cv2.rectangle(display_frame, (x1, y1), (x2, y2), (0, 0, 255), 3)
-                cv2.putText(display_frame, f"ALERT: {best['name']}", (x1, max(20, y1-10)),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                cv2.putText(display_frame, f"ALERT: {best['name']}", (x1, max(20, y1-10)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
             if USE_CENTER_CORRIDOR:
                 cv2.line(display_frame, (int(corridor_left), 0), (int(corridor_left), SCREEN_H), (255, 255, 255), 1)
@@ -210,35 +211,25 @@ async def run_system():
 
             # 4. Broadcast Image AND Logs
             if connected_clients:
-                # הכנת הודעות הלוג לשליחה
                 logs_to_send = []
                 while not log_queue.empty():
-                    try:
-                        logs_to_send.append(log_queue.get_nowait())
-                    except queue.Empty:
-                        break
+                    try: logs_to_send.append(log_queue.get_nowait())
+                    except queue.Empty: break
                 
-                # הכנת התמונה לשליחה
                 small_frame = cv2.resize(display_frame, (320, 240))
-                encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 50]
-                _, buffer = cv2.imencode('.jpg', small_frame, encode_param)
+                _, buffer = cv2.imencode('.jpg', small_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
                 jpg_as_text = base64.b64encode(buffer).decode('utf-8')
 
                 tasks = []
                 disconnected = set()
-                
                 for client in connected_clients:
                     try:
-                        # קודם שולחים את התמונה
                         tasks.append(client.send(jpg_as_text))
-                        # אחר כך שולחים את כל הלוגים שהצטברו
-                        for log_msg in logs_to_send:
-                            tasks.append(client.send(log_msg))
+                        for log_msg in logs_to_send: tasks.append(client.send(log_msg))
                     except websockets.exceptions.ConnectionClosed:
                         disconnected.add(client)
                 
-                if tasks:
-                    await asyncio.gather(*tasks, return_exceptions=True)
+                if tasks: await asyncio.gather(*tasks, return_exceptions=True)
                 connected_clients.difference_update(disconnected)
 
             await asyncio.sleep(0.001)
@@ -255,7 +246,5 @@ async def main():
         await run_system()
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("Stopped by user")
+    try: asyncio.run(main())
+    except KeyboardInterrupt: pass

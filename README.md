@@ -110,7 +110,7 @@ Note: The frontend is deployed on Vercel for production.
 
 
 ## Screenshots
-<img width="846" height="1195" alt="{D5EC4E3C-26DA-4E13-8460-EFE84305BC9B}" src="https://github.com/user-attachments/assets/84c59f57-e23d-48d7-b3db-1f6aad877250" />
+<img width="700" height="800" alt="{D5EC4E3C-26DA-4E13-8460-EFE84305BC9B}" src="https://github.com/user-attachments/assets/84c59f57-e23d-48d7-b3db-1f6aad877250" />
 
 ---
 

@@ -99,7 +99,7 @@ const VideoStream = () => {
         {/* Header */}
         <div className="card-header">
           <div className="header-text">
-            <h1 className="app-title">Smart Sight</h1>
+            <h1 className="app-title">EyesOn</h1>
             <p className="subtitle">RPi 5 Neural Surveillance</p>
           </div>
           <div className={`status-pill ${status.toLowerCase()}`}>

@@ -26,7 +26,7 @@
 
 ### Hardware
 * Raspberry Pi 5
-* Raspberry Pi Camera Module 3 (Picamera2)
+* Raspberry Pi Camera Module v2.1 (Picamera2)
 * Bluetooth Headset (AirPods / JBL)
 * Power Bank (for portability)
 

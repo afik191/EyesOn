@@ -66,7 +66,7 @@ Prerequisites:
 setup:
 ```bash
 # Clone the repository
-git clone [https://github.com/afik191/EyesOn.git](https://github.com/afik191/EyesOn.git)
+git clone https://github.com/afik191/EyesOn.git
 cd EyesOn/rpi
 
 # Install dependencies

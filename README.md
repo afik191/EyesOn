@@ -96,7 +96,7 @@ Note: The frontend is deployed on Vercel for production.
 
 
 ## Usage
-1. Power On: Connect the power bank to the Raspberry Pi.
+1. Power On: Connect the power bank to the Raspberry Pi .
 
 2. Auto-Connect: The system automatically connects to the configured WiFi and Bluetooth headset.
 

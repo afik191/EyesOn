@@ -1,5 +1,6 @@
 
 ### AI-Powered Assistive Wearable for the Visually Impaired
+<img width="240"  alt="EyesOn Logo" src="https://github.com/user-attachments/assets/1c17a5c6-1527-4274-8e3e-71502cc56bb6" />
 
 **EyesOn** is a smart wearable system designed to assist visually impaired individuals navigate their surroundings safely. Powered by a **Raspberry Pi 5** and **YOLOv11**, the system detects obstacles in real-time, provides directional audio feedback, and allows a remote caregiver to view a live feed and communicate via a **Walkie-Talkie** feature.
 
